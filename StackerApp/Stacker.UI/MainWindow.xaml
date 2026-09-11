@@ -1,0 +1,110 @@
+<Window x:Class="Stacker.UI.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="UVC Stacker для PHD2" Height="700" Width="1000"
+        WindowStartupLocation="CenterScreen">
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        
+        <!-- Панель управления камерой -->
+        <GroupBox Grid.Row="0" Header="Настройки камеры">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                
+                <StackPanel Grid.Column="0" Margin="5">
+                    <TextBlock Text="Камера:" Margin="0,0,0,5"/>
+                    <ComboBox x:Name="CmbCameras" Margin="0,0,0,10"/>
+                    <Button x:Name="BtnRefreshCameras" Content="Обновить список" Click="BtnRefreshCameras_Click"/>
+                    <Button x:Name="BtnConnect" Content="Подключить" Click="BtnConnect_Click"/>
+                    <Button x:Name="BtnDisconnect" Content="Отключить" Click="BtnDisconnect_Click"/>
+                </StackPanel>
+                
+                <StackPanel Grid.Column="1" Margin="5">
+                    <TextBlock Text="Режим:" Margin="0,0,0,5"/>
+                    <ComboBox x:Name="CmbModes" Margin="0,0,0,10"/>
+                    <TextBlock Text="Выдержка (мкс):" Margin="0,0,0,5"/>
+                    <TextBox x:Name="TxtExposure" Text="10000" Margin="0,0,0,5"/>
+                    <CheckBox x:Name="ChkAutoExposure" Content="Авто выдержка" Margin="0,0,0,5"/>
+                    <Button x:Name="BtnApplyExposure" Content="Применить" Click="BtnApplyExposure_Click"/>
+                </StackPanel>
+                
+                <StackPanel Grid.Column="2" Margin="5">
+                    <TextBlock Text="Усиление:" Margin="0,0,0,5"/>
+                    <TextBox x:Name="TxtGain" Text="0" Margin="0,0,0,5"/>
+                    <CheckBox x:Name="ChkAutoGain" Content="Авто усиление" Margin="0,0,0,5"/>
+                    <Button x:Name="BtnApplyGain" Content="Применить" Click="BtnApplyGain_Click"/>
+                    <TextBlock x:Name="LblStatus" Text="Статус: Отключено" Margin="0,10,0,0" FontWeight="Bold"/>
+                </StackPanel>
+            </Grid>
+        </GroupBox>
+        
+        <!-- Область просмотра изображений -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            
+            <GroupBox Grid.Column="0" Header="Текущий кадр" Margin="5">
+                <Image x:Name="ImgCurrentFrame" Stretch="Uniform"/>
+            </GroupBox>
+            
+            <GroupBox Grid.Column="1" Header="Накопление (текущая экспозиция)" Margin="5">
+                <Grid>
+                    <Image x:Name="ImgStacking" Stretch="Uniform"/>
+                    <TextBlock x:Name="LblStackingInfo" VerticalAlignment="Bottom" 
+                               Background="#80000000" Foreground="White" Padding="5"/>
+                </Grid>
+            </GroupBox>
+            
+            <GroupBox Grid.Column="2" Header="Результат для PHD2" Margin="5">
+                <Grid>
+                    <Image x:Name="ImgResult" Stretch="Uniform"/>
+                    <TextBlock x:Name="LblResultInfo" VerticalAlignment="Bottom" 
+                               Background="#80000000" Foreground="White" Padding="5"/>
+                </Grid>
+            </GroupBox>
+        </Grid>
+        
+        <!-- Панель настроек и статуса -->
+        <GroupBox Grid.Row="2" Header="Настройки сложения и статус">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                
+                <StackPanel Grid.Column="0" Margin="5">
+                    <TextBlock Text="Режим сложения:" Margin="0,0,0,5"/>
+                    <RadioButton x:Name="RdoSum" Content="Сумма (по умолчанию)" GroupName="StackMode" IsChecked="True"/>
+                    <RadioButton x:Name="RdoAverage" Content="Среднее арифметическое" GroupName="StackMode"/>
+                    <Button x:Name="BtnApplyStackMode" Content="Применить режим" Click="BtnApplyStackMode_Click"/>
+                </StackPanel>
+                
+                <StackPanel Grid.Column="1" Margin="5">
+                    <TextBlock Text="Запрошенная экспозиция:" Margin="0,0,0,5"/>
+                    <TextBlock x:Name="LblRequestedExposure" Text="0 мс" FontWeight="Bold"/>
+                    <ProgressBar x:Name="PrgExposure" Height="20" Minimum="0" Maximum="100" Margin="0,5,0,5"/>
+                    <TextBlock x:Name="LblExposureProgress" Text="0%"/>
+                </StackPanel>
+                
+                <StackPanel Grid.Column="2" Margin="5">
+                    <TextBlock Text="Статистика кадров:" Margin="0,0,0,5"/>
+                    <TextBlock x:Name="LblFrameStats" Text="Получено: 0 | Включено: 0 | Пропущено: 0"/>
+                    <TextBlock x:Name="LblFps" Text="FPS: 0"/>
+                    <TextBlock x:Name="LblAscomStatus" Text="ASCOM: Не подключено" Foreground="Gray"/>
+                </StackPanel>
+            </Grid>
+        </GroupBox>
+    </Grid>
+</Window>
