@@ -234,7 +234,7 @@ public class Camera : ICameraV3
     
     public short GainMax => 0;
     
-    public ArrayList GainsList => new ArrayList();
+    public ArrayList Gains => new ArrayList();
     
     public string Offsets => string.Empty;
     
@@ -254,7 +254,7 @@ public class Camera : ICameraV3
     
     public short OffsetMax => 0;
     
-    public ArrayList OffsetsList => new ArrayList();
+    public ArrayList Offsets => new ArrayList();
     
     public double ExposureMin => 1.0 / 30.0; // Минимальная экспозиция ~1 кадр при 30 FPS
     
@@ -300,14 +300,14 @@ public class Camera : ICameraV3
     
     public short PercentCompleted => _isExposing ? (short)(GetExposureProgress() * 100) : (short)100;
     
-    public cameraState CameraState
+    public CameraStates CameraState
     {
         get
         {
-            if (!_isConnected) return cameraState.cameraIdle;
-            if (_isExposing) return cameraState.cameraExposing;
-            if (_imageReady) return cameraState.cameraIdle;
-            return cameraState.cameraIdle;
+            if (!_isConnected) return CameraStates.cameraIdle;
+            if (_isExposing) return CameraStates.cameraExposing;
+            if (_imageReady) return CameraStates.cameraIdle;
+            return CameraStates.cameraIdle;
         }
     }
     
