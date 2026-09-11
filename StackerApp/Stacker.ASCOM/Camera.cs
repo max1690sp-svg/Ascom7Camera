@@ -33,6 +33,9 @@ public class Camera : ICameraV3
     private int _startY = 0;
     private int _numX = 640;
     private int _numY = 480;
+    private short _readoutMode = 0;
+    private short _gain = 0;
+    private short _offset = 0;
     
     public Camera()
     {
@@ -89,9 +92,9 @@ public class Camera : ICameraV3
     
     public string Name => "UVC Stacker Camera";
     
-    public object Action(string action, string parameter) => throw new NotImplementedException();
+    public string Action(string action, string parameter) => string.Empty;
     
-    public bool SetupDialog() => true;
+    public void SetupDialog() { }
     
     #endregion
     
@@ -217,13 +220,41 @@ public class Camera : ICameraV3
     
     public bool GainPresent => false;
     
-    public int GainValue { get; set; }
+    public short Gain
+    {
+        get => _gain;
+        set
+        {
+            if (_isExposing) throw new PropertyNotAvailableException("Нельзя менять Gain во время экспозиции");
+            _gain = value;
+        }
+    }
+    
+    public short GainMin => 0;
+    
+    public short GainMax => 0;
+    
+    public ArrayList GainsList => new ArrayList();
     
     public string Offsets => string.Empty;
     
     public bool OffsetPresent => false;
     
-    public int OffsetValue { get; set; }
+    public short Offset
+    {
+        get => _offset;
+        set
+        {
+            if (_isExposing) throw new PropertyNotAvailableException("Нельзя менять Offset во время экспозиции");
+            _offset = value;
+        }
+    }
+    
+    public short OffsetMin => 0;
+    
+    public short OffsetMax => 0;
+    
+    public ArrayList OffsetsList => new ArrayList();
     
     public double ExposureMin => 1.0 / 30.0; // Минимальная экспозиция ~1 кадр при 30 FPS
     
@@ -247,31 +278,38 @@ public class Camera : ICameraV3
         set { }
     }
     
-    public double GainMin => 0.0;
-    
-    public double GainMax => 0.0;
-    
-    public int ReadoutMode
+    public short ReadoutMode
     {
-        get => 0;
-        set { }
+        get => _readoutMode;
+        set
+        {
+            if (_isExposing) throw new PropertyNotAvailableException("Нельзя менять ReadoutMode во время экспозиции");
+            _readoutMode = value;
+        }
     }
     
-    public string[] ReadoutModes => new string[] { "Default" };
+    public ArrayList ReadoutModes => new ArrayList { "Default" };
     
     public string SensorName => "UVC Sensor";
     
-    public int OffsetMin => 0;
+    public double SubExposureDuration
+    {
+        get => _requestedExposureMs / 1000.0;
+        set { }
+    }
     
-    public int OffsetMax => 0;
+    public short PercentCompleted => _isExposing ? (short)(GetExposureProgress() * 100) : (short)100;
     
-    public ArrayList OffsetsList => new ArrayList();
-    
-    public ArrayList GainsList => new ArrayList();
-    
-    public double SubExposureDuration => 0.0;
-    
-    public int PercentCompleted => _isExposing ? (int)(GetExposureProgress() * 100) : 100;
+    public cameraState CameraState
+    {
+        get
+        {
+            if (!_isConnected) return cameraState.cameraIdle;
+            if (_isExposing) return cameraState.cameraExposing;
+            if (_imageReady) return cameraState.cameraIdle;
+            return cameraState.cameraIdle;
+        }
+    }
     
     public void AbortExposure()
     {
@@ -310,7 +348,7 @@ public class Camera : ICameraV3
         _isExposing = false;
     }
     
-    public Array ImageArray
+    public object ImageArray
     {
         get
         {
