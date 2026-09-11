@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Stacker.Core\Stacker.Core.csproj" />
+    <ProjectReference Include="..\Stacker.ASCOM\Stacker.ASCOM.csproj" />
   </ItemGroup>
 
   <ItemGroup>

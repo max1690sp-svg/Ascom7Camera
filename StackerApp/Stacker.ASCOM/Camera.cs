@@ -13,7 +13,6 @@ namespace Stacker.ASCOM;
 public class Camera : ICameraV3
 {
     private readonly FrameStacker _stacker;
-    private readonly ICameraController _controller;
     
     private bool _isConnected;
     private bool _isExposing;
@@ -34,12 +33,16 @@ public class Camera : ICameraV3
     
     public Camera()
     {
-        // Для работы с UI приложением используем статический доступ
-        // В реальном приложении это будет общая шина событий
         _stacker = new FrameStacker();
-        _controller = new UvcCameraController();
-        
         _stacker.Initialize(_cameraXSize, _cameraYSize);
+    }
+    
+    /// <summary>
+    /// Конструктор для использования с UI приложением
+    /// </summary>
+    public Camera(FrameStacker sharedStacker)
+    {
+        _stacker = sharedStacker;
     }
     
     #region ASCOM Required Properties
@@ -57,8 +60,8 @@ public class Camera : ICameraV3
     public void Dispose()
     {
         Disconnect();
-        _stacker.Dispose();
-        _controller.Dispose();
+        if (_stacker != null)
+            _stacker.Dispose();
     }
     
     public bool Connected
@@ -116,6 +119,8 @@ public class Camera : ICameraV3
     public double LastExposureDuration => _lastResult?.TotalExposureMs ?? 0.0;
     
     public bool LastExposureStartTime => _lastResult != null;
+    
+    public string LastExposureStartTimeString => _lastResult?.CompletionTime.ToString("yyyy-MM-dd HH:mm:ss.fff") ?? string.Empty;
     
     public int MaxADU => 65535;
     
@@ -308,14 +313,11 @@ public class Camera : ICameraV3
     /// <summary>
     /// Вызывается UI приложением для обновления статуса экспозиции
     /// </summary>
-    public void UpdateExposureProgress(StackedResult? result)
+    public void FinishExposure(StackedResult result)
     {
-        if (_isExposing && result != null)
-        {
-            _lastResult = result;
-            _isExposing = false;
-            _imageReady = true;
-        }
+        _lastResult = result;
+        _isExposing = false;
+        _imageReady = true;
     }
     
     /// <summary>
@@ -343,6 +345,10 @@ public class Camera : ICameraV3
     public StackedResult? GetCurrentResult() => _lastResult;
     
     public bool IsExposing => _isExposing;
+    
+    public DateTime ExposureStartTime => _exposureStartTime;
+    
+    public double RequestedExposureMs => _requestedExposureMs;
     
     public double GetExposureProgress()
     {

@@ -2,14 +2,13 @@
 # Build artifacts
 bin/
 obj/
-*.exe
 *.dll
+*.exe
 *.pdb
 *.userprefs
 
 # Dependencies
 packages/
-node_modules/
 
 # Logs
 *.log
@@ -17,23 +16,12 @@ node_modules/
 # User-specific files
 *.user
 *.suo
-.vs/
-.vscode/
-
-# Environment
-.env
-.env.local
-*.env.*
+*.userosscache
+*.sln.docstates
 
 # OS generated files
 .DS_Store
 Thumbs.db
-
-# Output directories (common in .NET projects)
-Debug/
-Release/
-x64/
-x86/
-```.next/
-dist/
-build/
+ehthumbs.db
+Icon?
+```

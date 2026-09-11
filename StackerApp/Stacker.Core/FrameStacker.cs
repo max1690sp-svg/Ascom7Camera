@@ -21,6 +21,14 @@ public class FrameStacker : IDisposable
     public event EventHandler<StackedResult>? ResultReady;
     public event EventHandler<int>? FrameAdded;
     
+    /// <summary>
+    /// Вызывается когда накопление завершено и результат готов
+    /// </summary>
+    private void OnResultReady(StackedResult result)
+    {
+        ResultReady?.Invoke(this, result);
+    }
+    
     public void Initialize(int width, int height)
     {
         lock (_lock)
@@ -83,6 +91,12 @@ public class FrameStacker : IDisposable
             var result = ProcessFrames(framesToProcess, requestedExposureMs);
             
             ResetCurrentExposure();
+            
+            // Уведомление подписчиков о готовности результата
+            if (result != null && result.IsValid)
+            {
+                OnResultReady(result);
+            }
             
             return result;
         }
@@ -171,7 +185,7 @@ public class FrameStacker : IDisposable
     
     public int GetQueuedFrameCount()
     {
-        lock (_lock) => _frameQueue.Count;
+        lock (_lock) return _frameQueue.Count;
     }
     
     public CapturedFrame? GetLatestFrame()

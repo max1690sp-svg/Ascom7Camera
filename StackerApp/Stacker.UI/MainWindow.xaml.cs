@@ -2,12 +2,13 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Stacker.Core;
+using Stacker.ASCOM;
 
 namespace Stacker.UI
 {
     public partial class MainWindow : Window
     {
-        private readonly ICameraController _cameraController;
+        private ICameraController? _cameraController;
         private readonly FrameStacker _frameStacker;
         private WriteableBitmap? _currentFrameBitmap;
         private WriteableBitmap? _stackingBitmap;
@@ -19,18 +20,24 @@ namespace Stacker.UI
         private DateTime _lastFpsTime;
         private int _framesLastSecond;
         
+        private CameraSettings _settings;
+        private Camera.ASCOM? _ascomCamera;
+        private System.Threading.Timer? _ascomUpdateTimer;
+        
         public MainWindow()
         {
             InitializeComponent();
             
-            _cameraController = new UvcCameraController();
+            _settings = CameraSettings.Load();
             _frameStacker = new FrameStacker();
+            _frameStacker.Mode = _settings.StackingMode;
             
-            _cameraController.ConnectionStateChanged += OnConnectionStateChanged;
-            _cameraController.FrameCaptured += OnFrameCaptured;
-            _cameraController.ErrorOccurred += OnErrorOccurred;
+            // Установка настроек из сохранённых
+            RdoSum.IsChecked = _settings.StackingMode == StackingMode.Sum;
+            RdoAverage.IsChecked = _settings.StackingMode == StackingMode.Average;
             
             _frameStacker.FrameAdded += OnFrameAdded;
+            _frameStacker.ResultReady += OnResultReady;
             
             Loaded += OnLoaded;
             Closing += OnClosing;
@@ -38,13 +45,53 @@ namespace Stacker.UI
         
         private void OnLoaded(object sender, RoutedEventArgs e)
         {
+            // Инициализация ASCOM-драйвера
+            _ascomCamera = new Camera.ASCOM(_frameStacker);
+            StartAscomUpdateTimer();
+            
             RefreshCameras();
+        }
+        
+        private void StartAscomUpdateTimer()
+        {
+            _ascomUpdateTimer = new System.Threading.Timer(
+                _ => UpdateAscomStatus(),
+                null,
+                TimeSpan.Zero,
+                TimeSpan.FromMilliseconds(100));
+        }
+        
+        private void UpdateAscomStatus()
+        {
+            if (_ascomCamera == null) return;
+            
+            Dispatcher.Invoke(() =>
+            {
+                SetAscomConnected(_ascomCamera.Connected);
+                
+                if (_ascomCamera.IsExposing)
+                {
+                    var progress = _ascomCamera.GetExposureProgress();
+                    LblRequestedExposure.Text = $"{_ascomCamera.RequestedExposureMs:F0} мс";
+                    PrgExposure.Value = Math.Min(100, progress * 100);
+                    LblExposureProgress.Text = $"{PrgExposure.Value:F0}%";
+                }
+            });
         }
         
         private async void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
         {
-            await _cameraController.DisconnectAsync();
+            _ascomUpdateTimer?.Dispose();
+            _ascomCamera?.Disconnect();
+            _ascomCamera?.Dispose();
+            
+            if (_cameraController != null)
+            {
+                await _cameraController.DisconnectAsync();
+            }
             _frameStacker.Dispose();
+            
+            _settings.Save();
         }
         
         private async void BtnRefreshCameras_Click(object sender, RoutedEventArgs e)
@@ -54,7 +101,22 @@ namespace Stacker.UI
         
         private async Task RefreshCameras()
         {
-            var cameras = await _cameraController.GetAvailableCamerasAsync();
+            // Очистка списка и добавление тестовой камеры
+            var cameras = new List<string> { "Test Camera (Simulator)" };
+            
+            // Попытка найти реальные UVC-камеры
+            try
+            {
+                var uvcController = new UvcCameraController();
+                var uvcCameras = await uvcController.GetAvailableCamerasAsync();
+                cameras.AddRange(uvcCameras);
+                uvcController.Dispose();
+            }
+            catch
+            {
+                // Игнорируем ошибки при поиске камер
+            }
+            
             CmbCameras.ItemsSource = cameras;
             if (cameras.Count > 0)
             {
@@ -65,6 +127,33 @@ namespace Stacker.UI
         private async void BtnConnect_Click(object sender, RoutedEventArgs e)
         {
             if (CmbCameras.SelectedItem is not string cameraId) return;
+            
+            // Выбор контроллера: тестовый или UVC
+            if (cameraId.Contains("Test Camera"))
+            {
+                _cameraController = new TestFrameGenerator();
+            }
+            else
+            {
+                _cameraController = new UvcCameraController();
+            }
+            
+            _cameraController.ConnectionStateChanged += OnConnectionStateChanged;
+            _cameraController.FrameCaptured += OnFrameCaptured;
+            _cameraController.ErrorOccurred += OnErrorOccurred;
+            
+            // Получение режимов
+            var modes = await _cameraController.GetSupportedModesAsync(cameraId);
+            CmbModes.ItemsSource = modes;
+            if (modes.Count > 0)
+            {
+                // Выбор режима из настроек или первого доступного
+                var selectedMode = modes.FirstOrDefault(m => 
+                    m.Width == _settings.SelectedWidth && 
+                    m.Height == _settings.SelectedHeight) ?? modes[0];
+                CmbModes.SelectedItem = selectedMode;
+            }
+            
             if (CmbModes.SelectedItem is not CameraMode mode) return;
             
             BtnConnect.IsEnabled = false;
@@ -74,6 +163,11 @@ namespace Stacker.UI
             {
                 _frameStacker.Initialize(mode.Width, mode.Height);
                 _cameraController.StartCapture();
+                
+                // Сохранение выбранной камеры и режима
+                _settings.SelectedCameraId = cameraId;
+                _settings.SelectedWidth = mode.Width;
+                _settings.SelectedHeight = mode.Height;
             }
             
             BtnConnect.IsEnabled = true;
@@ -81,11 +175,24 @@ namespace Stacker.UI
         
         private async void BtnDisconnect_Click(object sender, RoutedEventArgs e)
         {
-            await _cameraController.DisconnectAsync();
+            if (_cameraController != null)
+            {
+                _cameraController.ConnectionStateChanged -= OnConnectionStateChanged;
+                _cameraController.FrameCaptured -= OnFrameCaptured;
+                _cameraController.ErrorOccurred -= OnErrorOccurred;
+                
+                await _cameraController.DisconnectAsync();
+                _cameraController.Dispose();
+                _cameraController = null;
+            }
+            
+            CmbModes.ItemsSource = null;
         }
         
         private async void BtnApplyExposure_Click(object sender, RoutedEventArgs e)
         {
+            if (_cameraController == null) return;
+            
             if (int.TryParse(TxtExposure.Text, out var exposure))
             {
                 await _cameraController.SetExposureAsync(exposure, ChkAutoExposure.IsChecked ?? false);
@@ -94,6 +201,8 @@ namespace Stacker.UI
         
         private async void BtnApplyGain_Click(object sender, RoutedEventArgs e)
         {
+            if (_cameraController == null) return;
+            
             if (int.TryParse(TxtGain.Text, out var gain))
             {
                 await _cameraController.SetGainAsync(gain, ChkAutoGain.IsChecked ?? false);
@@ -103,6 +212,7 @@ namespace Stacker.UI
         private void BtnApplyStackMode_Click(object sender, RoutedEventArgs e)
         {
             _frameStacker.Mode = RdoSum.IsChecked == true ? StackingMode.Sum : StackingMode.Average;
+            _settings.StackingMode = _frameStacker.Mode;
         }
         
         private void OnConnectionStateChanged(object? sender, CameraConnectionState state)
@@ -154,6 +264,23 @@ namespace Stacker.UI
         private void OnFrameAdded(object? sender, int count)
         {
             _totalFramesIncluded = count;
+        }
+        
+        private void OnResultReady(object? sender, StackedResult result)
+        {
+            // Обновление изображения накопления
+            UpdateStackingImage(result);
+            
+            // Если ASCOM-драйвер ждёт результат экспозиции
+            if (_ascomCamera?.IsExposing == true)
+            {
+                var elapsed = (DateTime.Now - _ascomCamera.ExposureStartTime).TotalMilliseconds;
+                if (elapsed >= _ascomCamera.RequestedExposureMs)
+                {
+                    _ascomCamera.FinishExposure(result);
+                    UpdateResultImage(result);
+                }
+            }
         }
         
         private void OnErrorOccurred(object? sender, string error)
