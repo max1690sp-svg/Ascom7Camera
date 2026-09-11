@@ -216,59 +216,11 @@ public class Camera : ICameraV3
     
     public int CameraYSize => _cameraYSize;
     
-    public string Gains => string.Empty;
+    public string SensorName => "UVC Sensor";
     
-    public bool GainPresent => false;
+    public int BayerOffsetX => 0;
     
-    public short Gain
-    {
-        get => _gain;
-        set
-        {
-            if (_isExposing) throw new PropertyNotAvailableException("Нельзя менять Gain во время экспозиции");
-            _gain = value;
-        }
-    }
-    
-    public short GainMin => 0;
-    
-    public short GainMax => 0;
-    
-    public ArrayList Gains => new ArrayList();
-    
-    public string Offsets => string.Empty;
-    
-    public bool OffsetPresent => false;
-    
-    public short Offset
-    {
-        get => _offset;
-        set
-        {
-            if (_isExposing) throw new PropertyNotAvailableException("Нельзя менять Offset во время экспозиции");
-            _offset = value;
-        }
-    }
-    
-    public short OffsetMin => 0;
-    
-    public short OffsetMax => 0;
-    
-    public ArrayList Offsets => new ArrayList();
-    
-    public double ExposureMin => 1.0 / 30.0; // Минимальная экспозиция ~1 кадр при 30 FPS
-    
-    public double ExposureMax => 3600.0; // Максимум 1 час
-    
-    public bool FastReadout
-    {
-        get => false;
-        set { }
-    }
-    
-    public short BayerOffsetX => 0;
-    
-    public short BayerOffsetY => 0;
+    public int BayerOffsetY => 0;
     
     public double ExposureResolution => 0.001;
     
@@ -290,7 +242,41 @@ public class Camera : ICameraV3
     
     public ArrayList ReadoutModes => new ArrayList { "Default" };
     
-    public string SensorName => "UVC Sensor";
+    public string Gains => string.Empty;
+    
+    public bool GainPresent => false;
+    
+    public short Gain
+    {
+        get => _gain;
+        set
+        {
+            if (_isExposing) throw new PropertyNotAvailableException("Нельзя менять Gain во время экспозиции");
+            _gain = value;
+        }
+    }
+    
+    public short GainMin => 0;
+    
+    public short GainMax => 0;
+    
+    public string Offsets => string.Empty;
+    
+    public bool OffsetPresent => false;
+    
+    public int Offset
+    {
+        get => _offset;
+        set
+        {
+            if (_isExposing) throw new PropertyNotAvailableException("Нельзя менять Offset во время экспозиции");
+            _offset = (short)value;
+        }
+    }
+    
+    public int OffsetMin => 0;
+    
+    public int OffsetMax => 0;
     
     public double SubExposureDuration
     {
