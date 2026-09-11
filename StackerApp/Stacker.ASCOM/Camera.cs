@@ -1,3 +1,5 @@
+using System;
+using System.Collections;
 using ASCOM;
 using ASCOM.DeviceInterface;
 using Stacker.Core;
