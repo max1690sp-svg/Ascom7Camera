@@ -1,48 +1,43 @@
 ```
 # Build artifacts
-**/bin/
-**/obj/
-**/Debug/
-**/Release/
-*.dll
+*.obj
 *.exe
+*.dll
 *.pdb
-*.so
-*.dylib
-*.jar
-*.war
-*.class
+*.userprefs
+*.cache
+*.log
+*.tmp
 
 # Dependencies
 packages/
 node_modules/
-vendor/
+lib/
 
-# IDE files
+# IDE specific
 .vs/
-*.userprefs
-*.suo
+.vscode/
 *.user
-*.aps
-*.ncb
-*.obj
-*.log
-*.vcxproj.filters
+*.userosscache
+*.suo
+*.userprefs
 
 # OS generated files
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
+ehthumbs.db
+Icon?
+desktop.ini
 
-# Logs
-*.log
+# Configuration specific
+app.config
+web.config
 
-# Environment
-.env
-.env.local
-.env.*
+# Output directories
+bin/
+obj/
+Debug/
+Release/
+x64/
+x86/
 ```
