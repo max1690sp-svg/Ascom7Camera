@@ -1,52 +1,48 @@
 ```
 # Build artifacts
-bin/
-obj/
+**/bin/
+**/obj/
+**/Debug/
+**/Release/
 *.dll
 *.exe
 *.pdb
 *.so
 *.dylib
-*.o
-*.obj
+*.jar
+*.war
+*.class
 
 # Dependencies
 packages/
 node_modules/
-.nuget/
-.nvs/
+vendor/
 
 # IDE files
 .vs/
-.vscode/
-.idea/
 *.userprefs
-*.useroptions
 *.suo
 *.user
-*.cache
-*.csproj.user
+*.aps
+*.ncb
+*.obj
+*.log
+*.vcxproj.filters
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 
 # Logs
 *.log
-logs/
 
-# OS files
-.DS_Store
-Thumbs.db
-
-# Configuration
-*.config.bak
-*.lock-bak
-
-# Temporary files
-*.tmp
-*.temp
-*~
-```
-
-Wait, let me reconsider this. Looking at the modified files, they are all C# source files and project files (.csproj). There are no build artifacts, dependency directories, or temporary files in the change list that would require ignoring. The changes are purely source code and project configuration files.
-
-```
-
+# Environment
+.env
+.env.local
+.env.*
 ```
