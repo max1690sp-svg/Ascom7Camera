@@ -1,0 +1,39 @@
+```
+# Build artifacts
+bin/
+obj/
+*.exe
+*.dll
+*.pdb
+*.userprefs
+
+# Dependencies
+packages/
+node_modules/
+
+# Logs
+*.log
+
+# User-specific files
+*.user
+*.suo
+.vs/
+.vscode/
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Output directories (common in .NET projects)
+Debug/
+Release/
+x64/
+x86/
+```.next/
+dist/
+build/
