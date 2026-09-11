@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Runtime.InteropServices;
 using ASCOM;
 using ASCOM.DeviceInterface;
 using Stacker.Core;
@@ -26,8 +27,8 @@ public class Camera : ICameraV3
     // Настройки камеры
     private int _cameraXSize = 640;
     private int _cameraYSize = 480;
-    private int _binX = 1;
-    private int _binY = 1;
+    private short _binX = 1;
+    private short _binY = 1;
     private int _startX = 0;
     private int _startY = 0;
     private int _numX = 640;
@@ -49,7 +50,7 @@ public class Camera : ICameraV3
     
     #region ASCOM Required Properties
     
-    public string ActionName => throw new NotImplementedException();
+    public string ActionName => string.Empty;
     
     public ArrayList SupportedActions => new ArrayList();
     
@@ -80,11 +81,17 @@ public class Camera : ICameraV3
     
     public string Description => "UVC Stacker Camera for PHD2";
     
+    public string DriverInfo => "UVC Stacker Camera Driver v1.0.0";
+    
     public string DriverVersion => "1.0.0";
     
     public short InterfaceVersion => 3;
     
     public string Name => "UVC Stacker Camera";
+    
+    public object Action(string action, string parameter) => throw new NotImplementedException();
+    
+    public bool SetupDialog() => true;
     
     #endregion
     
@@ -108,7 +115,7 @@ public class Camera : ICameraV3
     
     public double CoolerPower => 0.0;
     
-    public int ElectronsPerADU => 1;
+    public double ElectronsPerADU => 1.0;
     
     public double FullWellCapacity => 65535.0;
     
@@ -120,15 +127,15 @@ public class Camera : ICameraV3
     
     public double LastExposureDuration => _lastResult?.TotalExposureMs ?? 0.0;
     
-    public bool LastExposureStartTime => _lastResult != null;
+    public string LastExposureStartTime => _lastResult != null ? "true" : "false";
     
     public string LastExposureStartTimeString => _lastResult?.CompletionTime.ToString("yyyy-MM-dd HH:mm:ss.fff") ?? string.Empty;
     
     public int MaxADU => 65535;
     
-    public int MaxBinX => 1;
+    public short MaxBinX => 1;
     
-    public int MaxBinY => 1;
+    public short MaxBinY => 1;
     
     public int NumX
     {
@@ -170,7 +177,7 @@ public class Camera : ICameraV3
         }
     }
     
-    public int BinX
+    public short BinX
     {
         get => _binX;
         set
@@ -180,7 +187,7 @@ public class Camera : ICameraV3
         }
     }
     
-    public int BinY
+    public short BinY
     {
         get => _binY;
         set
@@ -200,7 +207,7 @@ public class Camera : ICameraV3
         set { }
     }
     
-    public short SensorType => 0; // Monochrome
+    public SensorType SensorType => SensorType.Monochrome;
     
     public int CameraXSize => _cameraXSize;
     
@@ -212,15 +219,59 @@ public class Camera : ICameraV3
     
     public int GainValue { get; set; }
     
-    public int OffsetValue { get; set; }
-    
     public string Offsets => string.Empty;
     
     public bool OffsetPresent => false;
     
+    public int OffsetValue { get; set; }
+    
     public double ExposureMin => 1.0 / 30.0; // Минимальная экспозиция ~1 кадр при 30 FPS
     
     public double ExposureMax => 3600.0; // Максимум 1 час
+    
+    public bool FastReadout
+    {
+        get => false;
+        set { }
+    }
+    
+    public short BayerOffsetX => 0;
+    
+    public short BayerOffsetY => 0;
+    
+    public double ExposureResolution => 0.001;
+    
+    public bool CoolerOn
+    {
+        get => false;
+        set { }
+    }
+    
+    public double GainMin => 0.0;
+    
+    public double GainMax => 0.0;
+    
+    public int ReadoutMode
+    {
+        get => 0;
+        set { }
+    }
+    
+    public string[] ReadoutModes => new string[] { "Default" };
+    
+    public string SensorName => "UVC Sensor";
+    
+    public int OffsetMin => 0;
+    
+    public int OffsetMax => 0;
+    
+    public ArrayList OffsetsList => new ArrayList();
+    
+    public ArrayList GainsList => new ArrayList();
+    
+    public double SubExposureDuration => 0.0;
+    
+    public int PercentCompleted => _isExposing ? (int)(GetExposureProgress() * 100) : 100;
     
     public void AbortExposure()
     {
@@ -277,7 +328,7 @@ public class Camera : ICameraV3
         }
     }
     
-    public Array ImageArrayVariant
+    public object ImageArrayVariant
     {
         get
         {
