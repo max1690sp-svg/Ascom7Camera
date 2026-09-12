@@ -1,432 +1,296 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using Stacker.Core;
+using System.Windows.Threading;
 using Stacker.ASCOM;
+using Stacker.Core;
 
 namespace Stacker.UI
 {
     public partial class MainWindow : Window
     {
-        private ICameraController? _cameraController;
-        private readonly FrameStacker _frameStacker;
-        private WriteableBitmap? _currentFrameBitmap;
-        private WriteableBitmap? _stackingBitmap;
-        private WriteableBitmap? _resultBitmap;
-        
-        private int _totalFramesReceived;
-        private int _totalFramesIncluded;
-        private int _totalFramesSkipped;
-        private DateTime _lastFpsTime;
-        private int _framesLastSecond;
-        
-        private CameraSettings _settings;
         private Camera? _ascomCamera;
-        private System.Threading.Timer? _ascomUpdateTimer;
-        
+        private ICameraController? _cameraController;
+        private FrameStacker? _frameStacker;
+        private DispatcherTimer _uiTimer;
+        private bool _isInitialized;
+
         public MainWindow()
         {
             InitializeComponent();
-            
-            _settings = CameraSettings.Load();
-            _frameStacker = new FrameStacker();
-            _frameStacker.Mode = _settings.StackingMode;
-            
-            // Установка настроек из сохранённых
-            RdoSum.IsChecked = _settings.StackingMode == StackingMode.Sum;
-            RdoAverage.IsChecked = _settings.StackingMode == StackingMode.Average;
-            
-            _frameStacker.FrameAdded += OnFrameAdded;
-            _frameStacker.ResultReady += OnResultReady;
-            
-            Loaded += OnLoaded;
-            Closing += OnClosing;
+            _uiTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
+            _uiTimer.Tick += UiTimer_Tick;
         }
-        
-        private void OnLoaded(object sender, RoutedEventArgs e)
+
+        private async void Window_Loaded(object sender, RoutedEventArgs e)
         {
-            // Инициализация ASCOM-драйвера
-            _ascomCamera = new Camera(_frameStacker);
-            StartAscomUpdateTimer();
-            
-            RefreshCameras();
+            if (_isInitialized) return;
+
+            try
+            {
+                // Инициализация ядра
+                _frameStacker = new FrameStacker();
+                
+                // Инициализация ASCOM драйвера (теперь без аргументов)
+                _ascomCamera = new Camera(); 
+                
+                // Подписка на события ядра для обновления UI
+                _frameStacker.FrameAdded += (s, args) => UpdateStatus("Кадр получен", false);
+                _frameStacker.ResultReady += (s, args) => UpdateStatus("Результат готов", false);
+
+                await LoadCamerasAsync();
+                _uiTimer.Start();
+                _isInitialized = true;
+                UpdateStatus("Готов к работе", false);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка инициализации: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
-        
-        private void StartAscomUpdateTimer()
+
+        private async Task LoadCamerasAsync()
         {
-            _ascomUpdateTimer = new System.Threading.Timer(
-                _ => UpdateAscomStatus(),
-                null,
-                TimeSpan.Zero,
-                TimeSpan.FromMilliseconds(100));
+            CmbCameras.ItemsSource = null;
+            BtnConnect.IsEnabled = false;
+
+            try
+            {
+                // В реальной версии здесь будет поиск UVC камер через DirectShow/OpenCV
+                // Для примера добавим тестовую камеру и заглушку
+                var cameras = new List<CameraInfo>
+                {
+                    new CameraInfo { Id = "test", Name = "Тестовая камера (Симулятор)" },
+                    // new CameraInfo { Id = "uvc1", Name = "USB Camera 1" } - раскомментировать при наличии
+                };
+
+                CmbCameras.ItemsSource = cameras;
+                CmbCameras.SelectedIndex = 0;
+                BtnConnect.IsEnabled = true;
+            }
+            catch (Exception ex)
+            {
+                UpdateStatus($"Ошибка сканирования камер: {ex.Message}", true);
+            }
         }
-        
-        private void UpdateAscomStatus()
+
+        private async void BtnConnect_Click(object sender, RoutedEventArgs e)
         {
-            if (_ascomCamera == null) return;
+            if (_cameraController != null && _cameraController.IsConnected)
+            {
+                await DisconnectCameraAsync();
+                return;
+            }
+
+            if (CmbCameras.SelectedItem is not CameraInfo selectedCamera)
+                return;
+
+            try
+            {
+                BtnConnect.IsEnabled = false;
+                UpdateStatus("Подключение...", false);
+
+                // Выбор контроллера
+                if (selectedCamera.Id == "test")
+                {
+                    _cameraController = new TestFrameGenerator();
+                }
+                else
+                {
+                    // Здесь будет реализация UvcCameraController
+                    MessageBox.Show("Реальная UVC камера пока не подключена в демо-режиме.", "Инфо");
+                    BtnConnect.IsEnabled = true;
+                    return;
+                }
+
+                _cameraController.ConnectionStateChanged += Controller_ConnectionStateChanged;
+                _cameraController.FrameCaptured += Controller_FrameCaptured;
+                _cameraController.ErrorOccurred += Controller_ErrorOccurred;
+
+                await _cameraController.ConnectAsync(selectedCamera.Id);
+                
+                // Запуск цикла захвата если нужно (зависит от реализации контроллера)
+                // Обычно контроллер сам начинает поток после Connect
+                
+                UpdateStatus($"Подключено: {selectedCamera.Name}", false);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка подключения: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                BtnConnect.IsEnabled = true;
+            }
+        }
+
+        private async Task DisconnectCameraAsync()
+        {
+            if (_cameraController == null) return;
+
+            try
+            {
+                await _cameraController.DisconnectAsync();
+                _cameraController.ConnectionStateChanged -= Controller_ConnectionStateChanged;
+                _cameraController.FrameCaptured -= Controller_FrameCaptured;
+                _cameraController.ErrorOccurred -= Controller_ErrorOccurred;
+                _cameraController = null;
+                UpdateStatus("Отключено", false);
+            }
+            catch (Exception ex)
+            {
+                UpdateStatus($"Ошибка отключения: {ex.Message}", true);
+            }
+            finally
+            {
+                BtnConnect.IsEnabled = true;
+            }
+        }
+
+        private void Controller_ConnectionStateChanged(object? sender, CameraConnectionState e)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                BtnConnect.Content = e.IsConnected ? "Отключить" : "Подключить";
+                GrpCameraSettings.IsEnabled = !e.IsConnected;
+            });
+        }
+
+        private void Controller_FrameCaptured(object? sender, CapturedFrame e)
+        {
+            // Передача кадра в накопитель
+            _frameStacker?.AddFrame(e.Data, e.Timestamp);
             
             Dispatcher.Invoke(() =>
             {
-                SetAscomConnected(_ascomCamera.Connected);
-                
-                if (_ascomCamera.IsExposing)
-                {
-                    var progress = _ascomCamera.GetExposureProgress();
-                    LblRequestedExposure.Text = $"{_ascomCamera.RequestedExposureMs:F0} мс";
-                    PrgExposure.Value = Math.Min(100, progress * 100);
-                    LblExposureProgress.Text = $"{PrgExposure.Value:F0}%";
-                }
+                ImgCurrent.Source = ImageHelper.ToBitmapSource(e.Data);
+                LblFps.Content = $"FPS: {e.FramesPerSecond:F1}";
             });
         }
-        
-        private async void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
+
+        private void Controller_ErrorOccurred(object? sender, string e)
         {
-            _ascomUpdateTimer?.Dispose();
-            _ascomCamera?.Disconnect();
-            _ascomCamera?.Dispose();
-            
-            if (_cameraController != null)
-            {
-                await _cameraController.DisconnectAsync();
-            }
-            _frameStacker.Dispose();
-            
-            _settings.Save();
+            UpdateStatus($"Ошибка камеры: {e}", true);
         }
-        
-        private async void BtnRefreshCameras_Click(object sender, RoutedEventArgs e)
+
+        private void UiTimer_Tick(object? sender, EventArgs e)
         {
-            await RefreshCameras();
-        }
-        
-        private async Task RefreshCameras()
-        {
-            // Очистка списка и добавление тестовой камеры
-            var cameras = new List<string> { "Test Camera (Simulator)" };
-            
-            // Попытка найти реальные UVC-камеры
-            try
+            if (_ascomCamera == null || !_ascomCamera.Connected)
             {
-                var uvcController = new UvcCameraController();
-                var uvcCameras = await uvcController.GetAvailableCamerasAsync();
-                cameras.AddRange(uvcCameras);
-                uvcController.Dispose();
+                LblAscomStatus.Content = "ASCOM: Отключено";
+                return;
             }
-            catch
-            {
-                // Игнорируем ошибки при поиске камер
-            }
+
+            // Чтение свойств ASCOM для отображения статуса
+            var state = _ascomCamera.CameraState;
+            LblAscomStatus.Content = $"ASCOM: {state}";
             
-            CmbCameras.ItemsSource = cameras;
-            if (cameras.Count > 0)
+            if (state == ASCOM.DeviceInterface.CameraStates.cameraExposing)
             {
-                CmbCameras.SelectedIndex = 0;
-            }
-        }
-        
-        private async void BtnConnect_Click(object sender, RoutedEventArgs e)
-        {
-            if (CmbCameras.SelectedItem is not string cameraId) return;
-            
-            // Выбор контроллера: тестовый или UVC
-            if (cameraId.Contains("Test Camera"))
-            {
-                _cameraController = new TestFrameGenerator();
+                var progress = _ascomCamera.PercentCompleted;
+                PrbExposure.Value = progress;
+                LblExposureInfo.Content = $"Экспозиция: {_ascomCamera.LastExposureDuration:F2}s ({progress}%)";
             }
             else
             {
-                _cameraController = new UvcCameraController();
-            }
-            
-            _cameraController.ConnectionStateChanged += OnConnectionStateChanged;
-            _cameraController.FrameCaptured += OnFrameCaptured;
-            _cameraController.ErrorOccurred += OnErrorOccurred;
-            
-            // Получение режимов
-            var modes = await _cameraController.GetSupportedModesAsync(cameraId);
-            CmbModes.ItemsSource = modes;
-            if (modes.Count > 0)
-            {
-                // Выбор режима из настроек или первого доступного
-                var selectedMode = modes.FirstOrDefault(m => 
-                    m.Width == _settings.SelectedWidth && 
-                    m.Height == _settings.SelectedHeight) ?? modes[0];
-                CmbModes.SelectedItem = selectedMode;
-            }
-            
-            if (CmbModes.SelectedItem is not CameraMode mode) return;
-            
-            BtnConnect.IsEnabled = false;
-            var success = await _cameraController.ConnectAsync(cameraId, mode);
-            
-            if (success)
-            {
-                _frameStacker.Initialize(mode.Width, mode.Height);
-                _cameraController.StartCapture();
-                
-                // Сохранение выбранной камеры и режима
-                _settings.SelectedCameraId = cameraId;
-                _settings.SelectedWidth = mode.Width;
-                _settings.SelectedHeight = mode.Height;
-            }
-            
-            BtnConnect.IsEnabled = true;
-        }
-        
-        private async void BtnDisconnect_Click(object sender, RoutedEventArgs e)
-        {
-            if (_cameraController != null)
-            {
-                _cameraController.ConnectionStateChanged -= OnConnectionStateChanged;
-                _cameraController.FrameCaptured -= OnFrameCaptured;
-                _cameraController.ErrorOccurred -= OnErrorOccurred;
-                
-                await _cameraController.DisconnectAsync();
-                _cameraController.Dispose();
-                _cameraController = null;
-            }
-            
-            CmbModes.ItemsSource = null;
-        }
-        
-        private async void BtnApplyExposure_Click(object sender, RoutedEventArgs e)
-        {
-            if (_cameraController == null) return;
-            
-            if (int.TryParse(TxtExposure.Text, out var exposure))
-            {
-                await _cameraController.SetExposureAsync(exposure, ChkAutoExposure.IsChecked ?? false);
-            }
-        }
-        
-        private async void BtnApplyGain_Click(object sender, RoutedEventArgs e)
-        {
-            if (_cameraController == null) return;
-            
-            if (int.TryParse(TxtGain.Text, out var gain))
-            {
-                await _cameraController.SetGainAsync(gain, ChkAutoGain.IsChecked ?? false);
-            }
-        }
-        
-        private void BtnApplyStackMode_Click(object sender, RoutedEventArgs e)
-        {
-            _frameStacker.Mode = RdoSum.IsChecked == true ? StackingMode.Sum : StackingMode.Average;
-            _settings.StackingMode = _frameStacker.Mode;
-        }
-        
-        private void OnConnectionStateChanged(object? sender, CameraConnectionState state)
-        {
-            Dispatcher.Invoke(() =>
-            {
-                LblStatus.Text = $"Статус: {GetStateName(state)}";
-                BtnConnect.IsEnabled = state == CameraConnectionState.Disconnected;
-                BtnDisconnect.IsEnabled = state == CameraConnectionState.Connected;
-                CmbCameras.IsEnabled = state == CameraConnectionState.Disconnected;
-                CmbModes.IsEnabled = state == CameraConnectionState.Disconnected;
-            });
-        }
-        
-        private string GetStateName(CameraConnectionState state) => state switch
-        {
-            CameraConnectionState.Disconnected => "Отключено",
-            CameraConnectionState.Connecting => "Подключение...",
-            CameraConnectionState.Connected => "Подключено",
-            CameraConnectionState.Error => "Ошибка",
-            _ => "Неизвестно"
-        };
-        
-        private void OnFrameCaptured(object? sender, CapturedFrame frame)
-        {
-            _totalFramesReceived++;
-            _framesLastSecond++;
-            
-            // Обновление статистики FPS
-            var now = DateTime.Now;
-            if ((now - _lastFpsTime).TotalSeconds >= 1.0)
-            {
-                Dispatcher.Invoke(() => LblFps.Text = $"FPS: {_framesLastSecond}");
-                _framesLastSecond = 0;
-                _lastFpsTime = now;
-            }
-            
-            _frameStacker.AddFrame(frame);
-            
-            // Отображение текущего кадра
-            UpdateCurrentFrameImage(frame);
-            
-            Dispatcher.Invoke(() =>
-            {
-                LblFrameStats.Text = $"Получено: {_totalFramesReceived} | Включено: {_totalFramesIncluded} | Пропущено: {_totalFramesSkipped}";
-            });
-        }
-        
-        private void OnFrameAdded(object? sender, int count)
-        {
-            _totalFramesIncluded = count;
-        }
-        
-        private void OnResultReady(object? sender, StackedResult result)
-        {
-            // Обновление изображения накопления
-            UpdateStackingImage(result);
-            
-            // Если ASCOM-драйвер ждёт результат экспозиции
-            if (_ascomCamera?.IsExposing == true)
-            {
-                var elapsed = (DateTime.Now - _ascomCamera.ExposureStartTime).TotalMilliseconds;
-                if (elapsed >= _ascomCamera.RequestedExposureMs)
+                PrbExposure.Value = 0;
+                if (_ascomCamera.ImageReady)
                 {
-                    _ascomCamera.FinishExposure(result);
-                    UpdateResultImage(result);
+                    LblExposureInfo.Content = "Изображение готово";
                 }
             }
         }
-        
-        private void OnErrorOccurred(object? sender, string error)
+
+        private void UpdateStatus(string message, bool isError)
         {
             Dispatcher.Invoke(() =>
             {
-                LblStatus.Text = $"Ошибка: {error}";
+                LblStatus.Content = message;
+                LblStatus.Foreground = System.Windows.Media.Brushes.Red;
+                if (!isError)
+                    LblStatus.Foreground = System.Windows.Media.Brushes.Black;
             });
         }
-        
-        private void UpdateCurrentFrameImage(CapturedFrame frame)
+
+        private void BtnStartExposure_Click(object sender, RoutedEventArgs e)
         {
-            if (_currentFrameBitmap == null || 
-                _currentFrameBitmap.PixelWidth != frame.Width || 
-                _currentFrameBitmap.PixelHeight != frame.Height)
+            if (_ascomCamera == null || !_ascomCamera.Connected)
             {
-                _currentFrameBitmap = new WriteableBitmap(frame.Width, frame.Height, 96, 96, PixelFormats.Gray8, null);
-                ImgCurrentFrame.Source = _currentFrameBitmap;
+                MessageBox.Show("ASCOM камера не подключена", "Ошибка");
+                return;
             }
-            
-            _currentFrameBitmap.Lock();
+
+            if (!double.TryParse(TxtExposure.Text, out double duration))
+            {
+                MessageBox.Show("Неверный формат выдержки", "Ошибка");
+                return;
+            }
+
             try
             {
-                _currentFrameBitmap.WritePixels(
-                    new Int32Rect(0, 0, frame.Width, frame.Height),
-                    frame.ImageData,
-                    frame.Width,
-                    0);
+                // Запуск экспозиции через ASCOM интерфейс
+                _ascomCamera.StartExposure(duration, true);
+                UpdateStatus($"Начата экспозиция {duration}s", false);
             }
-            finally
+            catch (Exception ex)
             {
-                _currentFrameBitmap.Unlock();
+                MessageBox.Show($"Ошибка старта: {ex.Message}", "Ошибка");
             }
         }
-        
-        public void UpdateStackingImage(StackedResult result)
+
+        private void BtnStopExposure_Click(object sender, RoutedEventArgs e)
         {
-            if (_stackingBitmap == null ||
-                _stackingBitmap.PixelWidth != result.Width ||
-                _stackingBitmap.PixelHeight != result.Height)
-            {
-                _stackingBitmap = new WriteableBitmap(result.Width, result.Height, 96, 96, PixelFormats.Gray8, null);
-                ImgStacking.Source = _stackingBitmap;
-            }
-            
-            // Конвертация ushort -> byte для отображения
-            var byteData = new byte[result.Width * result.Height];
-            double maxVal = 1;
-            foreach (var val in result.ImageData)
-            {
-                if (val > maxVal) maxVal = val;
-            }
-            double scale = maxVal > 0 ? 255.0 / maxVal : 1.0;
-            
-            for (int i = 0; i < byteData.Length; i++)
-            {
-                byteData[i] = (byte)Math.Min(255, result.ImageData[i] * scale);
-            }
-            
-            _stackingBitmap.Lock();
+            _ascomCamera?.StopExposure();
+            UpdateStatus("Экспозиция остановлена", false);
+        }
+
+        private void BtnConnectAscom_Click(object sender, RoutedEventArgs e)
+        {
+            if (_ascomCamera == null) return;
+
             try
             {
-                _stackingBitmap.WritePixels(
-                    new Int32Rect(0, 0, result.Width, result.Height),
-                    byteData,
-                    result.Width,
-                    0);
-            }
-            finally
-            {
-                _stackingBitmap.Unlock();
-            }
-            
-            Dispatcher.Invoke(() =>
-            {
-                LblStackingInfo.Text = $"Кадров: {result.FramesStacked}\nЭкспозиция: {result.TotalExposureMs:F1} мс";
-            });
-        }
-        
-        public void UpdateResultImage(StackedResult result)
-        {
-            if (_resultBitmap == null ||
-                _resultBitmap.PixelWidth != result.Width ||
-                _resultBitmap.PixelHeight != result.Height)
-            {
-                _resultBitmap = new WriteableBitmap(result.Width, result.Height, 96, 96, PixelFormats.Gray8, null);
-                ImgResult.Source = _resultBitmap;
-            }
-            
-            // Конвертация ushort -> byte для отображения
-            var byteData = new byte[result.Width * result.Height];
-            double maxVal = 1;
-            foreach (var val in result.ImageData)
-            {
-                if (val > maxVal) maxVal = val;
-            }
-            double scale = maxVal > 0 ? 255.0 / maxVal : 1.0;
-            
-            for (int i = 0; i < byteData.Length; i++)
-            {
-                byteData[i] = (byte)Math.Min(255, result.ImageData[i] * scale);
-            }
-            
-            _resultBitmap.Lock();
-            try
-            {
-                _resultBitmap.WritePixels(
-                    new Int32Rect(0, 0, result.Width, result.Height),
-                    byteData,
-                    result.Width,
-                    0);
-            }
-            finally
-            {
-                _resultBitmap.Unlock();
-            }
-            
-            Dispatcher.Invoke(() =>
-            {
-                LblResultInfo.Text = $"Кадров: {result.FramesStacked}\nВсего экспозиция: {result.TotalExposureMs:F1} мс";
-            });
-        }
-        
-        public void UpdateExposureProgress(double requestedMs, double elapsedMs)
-        {
-            Dispatcher.Invoke(() =>
-            {
-                LblRequestedExposure.Text = $"{requestedMs:F0} мс";
-                if (requestedMs > 0)
+                if (_ascomCamera.Connected)
                 {
-                    PrgExposure.Value = Math.Min(100, (elapsedMs / requestedMs) * 100);
-                    LblExposureProgress.Text = $"{PrgExposure.Value:F0}%";
+                    _ascomCamera.Connected = false;
+                    BtnConnectAscom.Content = "Подключить ASCOM";
+                    UpdateStatus("ASCOM отключено", false);
                 }
-            });
-        }
-        
-        public void SetAscomConnected(bool connected)
-        {
-            Dispatcher.Invoke(() =>
+                else
+                {
+                    _ascomCamera.Connected = true;
+                    BtnConnectAscom.Content = "Отключить ASCOM";
+                    UpdateStatus("ASCOM подключено", false);
+                }
+            }
+            catch (Exception ex)
             {
-                LblAscomStatus.Text = connected ? "ASCOM: Подключено" : "ASCOM: Не подключено";
-                LblAscomStatus.Foreground = connected ? Brushes.Green : Brushes.Gray;
-            });
+                MessageBox.Show($"Ошибка подключения ASCOM: {ex.Message}", "Ошибка");
+            }
         }
-        
-        public ICameraController CameraController => _cameraController;
-        public FrameStacker FrameStacker => _frameStacker;
+    }
+
+    // Вспомогательный класс для списка камер
+    public class CameraInfo
+    {
+        public string Id { get; set; } = "";
+        public string Name { get; set; } = "";
+        public override string ToString() => Name;
+    }
+
+    // Простой конвертер для демонстрации (в реальном проекте вынести в отдельный файл)
+    public static class ImageHelper
+    {
+        public static System.Windows.Media.Imaging.BitmapSource ToBitmapSource(short[,] data)
+        {
+            // Упрощенная конвертация для примера
+            // В реальности нужно масштабировать ushort -> byte или использовать 16-bit формат
+            int width = data.GetLength(0);
+            int height = data.GetLength(1);
+            var bitmap = new System.Windows.Media.Imaging.WriteableBitmap(width, height, 96, 96, System.Windows.Media.PixelFormats.Gray16, null);
+            
+            // Копирование данных (требуется unsafe блок или Marshal для эффективности)
+            // Здесь заглушка
+            return bitmap;
+        }
     }
 }
