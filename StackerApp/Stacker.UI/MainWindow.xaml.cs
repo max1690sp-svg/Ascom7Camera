@@ -21,7 +21,7 @@ namespace Stacker.UI
         private int _framesLastSecond;
         
         private CameraSettings _settings;
-        private Camera.ASCOM? _ascomCamera;
+        private Camera? _ascomCamera;
         private System.Threading.Timer? _ascomUpdateTimer;
         
         public MainWindow()
@@ -46,7 +46,7 @@ namespace Stacker.UI
         private void OnLoaded(object sender, RoutedEventArgs e)
         {
             // Инициализация ASCOM-драйвера
-            _ascomCamera = new Camera.ASCOM(_frameStacker);
+            _ascomCamera = new Camera(_frameStacker);
             StartAscomUpdateTimer();
             
             RefreshCameras();
