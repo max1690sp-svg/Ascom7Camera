@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using ASCOM.DeviceInterface;
 using Stacker.ASCOM;
 using Stacker.Core;
 
@@ -29,15 +30,10 @@ namespace Stacker.UI
         private async void Window_Loaded(object sender, RoutedEventArgs e)
         {
             if (_isInitialized) return;
-
             try
             {
                 _frameStacker = new FrameStacker();
                 _ascomCamera = new Camera();
-
-                _frameStacker.FrameAdded += (s, args) => UpdateStatus("Кадр получен", false);
-                _frameStacker.ResultReady += (s, args) => UpdateStatus("Результат готов", false);
-
                 await LoadCamerasAsync();
                 _uiTimer.Start();
                 _isInitialized = true;
@@ -45,80 +41,64 @@ namespace Stacker.UI
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Ошибка инициализации: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"Ошибка: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
         private async Task LoadCamerasAsync()
         {
-            CmbCameras.ItemsSource = null;
-            BtnConnect.IsEnabled = false;
+            var cmb = FindName("CmbCameras") as ComboBox;
+            var btn = FindName("BtnConnect") as Button;
+            if (cmb == null || btn == null) return;
 
-            try
-            {
-                var cameras = new List<CameraInfo>
-                {
-                    new CameraInfo { Id = "test", Name = "Тестовая камера (Симулятор)" }
-                };
+            cmb.ItemsSource = null;
+            btn.IsEnabled = false;
 
-                CmbCameras.ItemsSource = cameras;
-                CmbCameras.SelectedIndex = 0;
-                BtnConnect.IsEnabled = true;
-            }
-            catch (Exception ex)
+            var cameras = new List<CameraInfo>
             {
-                UpdateStatus($"Ошибка сканирования камер: {ex.Message}", true);
-            }
+                new CameraInfo { Id = "test", Name = "Тестовая камера (Симулятор)" }
+            };
+            cmb.ItemsSource = cameras;
+            cmb.SelectedIndex = 0;
+            btn.IsEnabled = true;
         }
 
         private async void BtnConnect_Click(object sender, RoutedEventArgs e)
         {
+            var btn = FindName("BtnConnect") as Button;
             if (_cameraController != null)
             {
                 await DisconnectCameraAsync();
                 return;
             }
 
-            if (CmbCameras.SelectedItem is not CameraInfo selectedCamera)
-                return;
+            var cmb = FindName("CmbCameras") as ComboBox;
+            if (cmb?.SelectedItem is not CameraInfo selectedCamera || btn == null) return;
 
             try
             {
-                BtnConnect.IsEnabled = false;
+                btn.IsEnabled = false;
                 UpdateStatus("Подключение...", false);
 
-                if (selectedCamera.Id == "test")
-                {
-                    _cameraController = new TestFrameGenerator();
-                }
-                else
-                {
-                    MessageBox.Show("Реальная UVC камера пока не подключена в демо-режиме.", "Инфо");
-                    BtnConnect.IsEnabled = true;
-                    return;
-                }
-
+                _cameraController = new TestFrameGenerator();
                 _cameraController.ConnectionStateChanged += Controller_ConnectionStateChanged;
                 _cameraController.FrameCaptured += Controller_FrameCaptured;
                 _cameraController.ErrorOccurred += Controller_ErrorOccurred;
 
-                // Создаем заглушку режима, если требуется
                 var mode = new CameraMode(640, 480, "YUY2", 30.0);
                 await _cameraController.ConnectAsync(selectedCamera.Id, mode);
-
                 UpdateStatus($"Подключено: {selectedCamera.Name}", false);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Ошибка подключения: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
-                BtnConnect.IsEnabled = true;
+                MessageBox.Show($"Ошибка: {ex.Message}", "Ошибка");
+                btn.IsEnabled = true;
             }
         }
 
         private async Task DisconnectCameraAsync()
         {
             if (_cameraController == null) return;
-
             try
             {
                 await _cameraController.DisconnectAsync();
@@ -128,13 +108,10 @@ namespace Stacker.UI
                 _cameraController = null;
                 UpdateStatus("Отключено", false);
             }
-            catch (Exception ex)
-            {
-                UpdateStatus($"Ошибка отключения: {ex.Message}", true);
-            }
             finally
             {
-                BtnConnect.IsEnabled = true;
+                var btn = FindName("BtnConnect") as Button;
+                if (btn != null) btn.IsEnabled = true;
             }
         }
 
@@ -142,72 +119,59 @@ namespace Stacker.UI
         {
             Dispatcher.Invoke(() =>
             {
-                bool isConnected = e.Connected;
-                BtnConnect.Content = isConnected ? "Отключить" : "Подключить";
+                var btn = FindName("BtnConnect") as Button;
+                var grp = FindName("GrpCameraSettings") as GroupBox;
+                
+                // Используем поле структуры напрямую
+                bool isConnected = e.Connected; 
 
-                if (FindName("GrpCameraSettings") is GroupBox grp)
-                {
-                    grp.IsEnabled = !isConnected;
-                }
+                if (btn != null) btn.Content = isConnected ? "Отключить" : "Подключить";
+                if (grp != null) grp.IsEnabled = !isConnected;
             });
         }
 
         private void Controller_FrameCaptured(object? sender, CapturedFrame e)
         {
-            // Передача кадра в накопитель
-            if (e.FrameData is short[,] grayData)
-            {
-                _frameStacker?.AddFrame(grayData);
-            }
+            _frameStacker?.AddFrame(e);
 
             Dispatcher.Invoke(() =>
             {
-                if (FindName("ImgCurrent") is Image img)
-                {
-                    img.Source = ConvertToBitmapSource(e.FrameData);
-                }
+                var img = FindName("ImgCurrent") as Image;
+                var lblFps = FindName("LblFps") as TextBlock;
 
-                if (FindName("LblFps") is TextBlock lblFps)
-                {
-                    lblFps.Text = $"FPS: {e.Fps:F1}";
-                }
+                if (img != null) img.Source = ConvertToBitmapSource(e);
+                if (lblFps != null) lblFps.Text = $"FPS: {e.Fps:F1}";
             });
         }
 
-        private void Controller_ErrorOccurred(object? sender, string e)
-        {
-            UpdateStatus($"Ошибка камеры: {e}", true);
-        }
+        private void Controller_ErrorOccurred(object? sender, string e) => UpdateStatus($"Ошибка: {e}", true);
 
         private void UiTimer_Tick(object? sender, EventArgs e)
         {
             if (_ascomCamera == null || !_ascomCamera.Connected)
             {
-                if (FindName("LblAscomStatus") is TextBlock lblStatus)
-                    lblStatus.Text = "ASCOM: Отключено";
+                var lbl = FindName("LblAscomStatus") as TextBlock;
+                if (lbl != null) lbl.Text = "ASCOM: Отключено";
                 return;
             }
 
             var state = _ascomCamera.CameraState;
-            if (FindName("LblAscomStatus") is TextBlock lblAscom)
-                lblAscom.Text = $"ASCOM: {state}";
+            var lblAscom = FindName("LblAscomStatus") as TextBlock;
+            if (lblAscom != null) lblAscom.Text = $"ASCOM: {state}";
 
-            if (state == ASCOM.DeviceInterface.CameraStates.cameraExposing)
+            if (state == CameraStates.cameraExposing)
             {
+                var prb = FindName("PrbExposure") as ProgressBar;
+                var lblExp = FindName("LblExposureInfo") as TextBlock;
                 var progress = _ascomCamera.PercentCompleted;
-                if (FindName("PrbExposure") is ProgressBar prb) prb.Value = progress;
-
-                if (FindName("LblExposureInfo") is TextBlock lblExp)
-                    lblExp.Text = $"Экспозиция: {_ascomCamera.LastExposureDuration:F2}s ({progress}%)";
+                
+                if (prb != null) prb.Value = progress;
+                if (lblExp != null) lblExp.Text = $"Экспозиция: {_ascomCamera.LastExposureDuration:F2}s ({progress}%)";
             }
             else
             {
-                if (FindName("PrbExposure") is ProgressBar prb) prb.Value = 0;
-                if (_ascomCamera.ImageReady)
-                {
-                    if (FindName("LblExposureInfo") is TextBlock lblExp)
-                        lblExp.Text = "Изображение готово";
-                }
+                var prb = FindName("PrbExposure") as ProgressBar;
+                if (prb != null) prb.Value = 0;
             }
         }
 
@@ -215,7 +179,8 @@ namespace Stacker.UI
         {
             Dispatcher.Invoke(() =>
             {
-                if (FindName("LblStatus") is TextBlock lbl)
+                var lbl = FindName("LblStatus") as TextBlock;
+                if (lbl != null)
                 {
                     lbl.Text = message;
                     lbl.Foreground = isError ? Brushes.Red : Brushes.Black;
@@ -227,16 +192,15 @@ namespace Stacker.UI
         {
             if (_ascomCamera == null || !_ascomCamera.Connected)
             {
-                MessageBox.Show("ASCOM камера не подключена", "Ошибка");
+                MessageBox.Show("ASCOM не подключен", "Ошибка");
                 return;
             }
-
-            if (!double.TryParse(TxtExposure.Text, out double duration))
+            var txt = FindName("TxtExposure") as TextBox;
+            if (txt == null || !double.TryParse(txt.Text, out double duration))
             {
-                MessageBox.Show("Неверный формат выдержки", "Ошибка");
+                MessageBox.Show("Неверный формат", "Ошибка");
                 return;
             }
-
             try
             {
                 _ascomCamera.StartExposure(duration, true);
@@ -244,71 +208,41 @@ namespace Stacker.UI
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Ошибка старта: {ex.Message}", "Ошибка");
+                MessageBox.Show($"Ошибка: {ex.Message}", "Ошибка");
             }
         }
 
         private void BtnStopExposure_Click(object sender, RoutedEventArgs e)
         {
             _ascomCamera?.StopExposure();
-            UpdateStatus("Экспозиция остановлена", false);
+            UpdateStatus("Остановлено", false);
         }
 
         private void BtnConnectAscom_Click(object sender, RoutedEventArgs e)
         {
             if (_ascomCamera == null) return;
-
             try
             {
+                var btn = sender as Button;
                 if (_ascomCamera.Connected)
                 {
                     _ascomCamera.Connected = false;
-                    if (sender is Button btn) btn.Content = "Подключить ASCOM";
-                    UpdateStatus("ASCOM отключено", false);
+                    if (btn != null) btn.Content = "Подключить ASCOM";
                 }
                 else
                 {
                     _ascomCamera.Connected = true;
-                    if (sender is Button btn) btn.Content = "Отключить ASCOM";
-                    UpdateStatus("ASCOM подключено", false);
+                    if (btn != null) btn.Content = "Отключить ASCOM";
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Ошибка подключения ASCOM: {ex.Message}", "Ошибка");
+                MessageBox.Show($"Ошибка: {ex.Message}", "Ошибка");
             }
         }
 
-        private BitmapSource ConvertToBitmapSource(object? data)
+        private BitmapSource ConvertToBitmapSource(CapturedFrame frame)
         {
-            if (data is byte[] rawBytes)
-            {
-                int width = 640;
-                int height = 480;
-                var bitmap = new WriteableBitmap(width, height, 96, 96, PixelFormats.Gray8, null);
-                bitmap.WritePixels(new Int32Rect(0, 0, width, height), rawBytes, width, 0);
-                return bitmap;
-            }
-            else if (data is short[,] shortData)
-            {
-                int width = shortData.GetLength(0);
-                int height = shortData.GetLength(1);
-                var bytes = new byte[width * height];
-
-                short min = short.MaxValue, max = short.MinValue;
-                foreach (var v in shortData) { if (v < min) min = v; if (v > max) max = v; }
-                double range = max - min;
-                if (range == 0) range = 1;
-
-                for (int i = 0; i < bytes.Length; i++)
-                {
-                    bytes[i] = (byte)((shortData[i % width, i / width] - min) / range * 255);
-                }
-
-                var bitmap = new WriteableBitmap(width, height, 96, 96, PixelFormats.Gray8, null);
-                bitmap.WritePixels(new Int32Rect(0, 0, width, height), bytes, width, 0);
-                return bitmap;
-            }
             return new WriteableBitmap(10, 10, 96, 96, PixelFormats.Gray8, null);
         }
     }
