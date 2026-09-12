@@ -1,1 +1,26 @@
-Nothing should be ignored in this case, as the changes only include source code files (.xaml and .xaml.cs) which are part of the normal project files and not build artifacts, dependencies, or temporary files.
+```
+# Build artifacts
+bin/
+obj/
+*.dll
+*.exe
+*.pdb
+*.userprefs
+*.cache
+*.log
+
+# Dependencies
+packages/
+node_modules/
+
+# Editors
+.vs/
+.idea/
+*.user
+*.userosscache
+*.suo
+
+# OS
+.DS_Store
+Thumbs.db
+```
