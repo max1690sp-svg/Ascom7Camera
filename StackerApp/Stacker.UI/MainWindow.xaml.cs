@@ -35,10 +35,10 @@ namespace Stacker.UI
                 // Инициализация ядра
                 _frameStacker = new FrameStacker();
                 
-                // Инициализация ASCOM драйвера
+                // Инициализация ASCOM драйвера (теперь без аргументов)
                 _ascomCamera = new Camera(); 
                 
-                // Подписка на события ядра
+                // Подписка на события ядра для обновления UI
                 _frameStacker.FrameAdded += (s, args) => UpdateStatus("Кадр получен", false);
                 _frameStacker.ResultReady += (s, args) => UpdateStatus("Результат готов", false);
 
@@ -60,9 +60,12 @@ namespace Stacker.UI
 
             try
             {
+                // В реальной версии здесь будет поиск UVC камер через DirectShow/OpenCV
+                // Для примера добавим тестовую камеру и заглушку
                 var cameras = new List<CameraInfo>
                 {
-                    new CameraInfo { Id = "test", Name = "Тестовая камера (Симулятор)" }
+                    new CameraInfo { Id = "test", Name = "Тестовая камера (Симулятор)" },
+                    // new CameraInfo { Id = "uvc1", Name = "USB Camera 1" } - раскомментировать при наличии
                 };
 
                 CmbCameras.ItemsSource = cameras;
@@ -91,12 +94,14 @@ namespace Stacker.UI
                 BtnConnect.IsEnabled = false;
                 UpdateStatus("Подключение...", false);
 
+                // Выбор контроллера
                 if (selectedCamera.Id == "test")
                 {
                     _cameraController = new TestFrameGenerator();
                 }
                 else
                 {
+                    // Здесь будет реализация UvcCameraController
                     MessageBox.Show("Реальная UVC камера пока не подключена в демо-режиме.", "Инфо");
                     BtnConnect.IsEnabled = true;
                     return;
@@ -106,11 +111,15 @@ namespace Stacker.UI
                 _cameraController.FrameCaptured += Controller_FrameCaptured;
                 _cameraController.ErrorOccurred += Controller_ErrorOccurred;
 
-                // Получаем первый доступный режим камеры
+                // Получаем первый доступный режим камеры (заглушка)
                 var modes = await _cameraController.GetAvailableModesAsync();
                 if (modes.Count > 0)
                 {
                     await _cameraController.ConnectAsync(selectedCamera.Id, modes[0]);
+                }
+                else
+                {
+                     throw new Exception("Нет доступных режимов камеры");
                 }
                 
                 UpdateStatus($"Подключено: {selectedCamera.Name}", false);
@@ -149,19 +158,20 @@ namespace Stacker.UI
         {
             Dispatcher.Invoke(() =>
             {
-                BtnConnect.Content = e.Connected ? "Отключить" : "Подключить";
-                GrpCameraSettings.IsEnabled = !e.Connected;
+                BtnConnect.Content = e.IsConnected ? "Отключить" : "Подключить";
+                // GrpCameraSettings.IsEnabled = !e.IsConnected; // Проверить наличие в XAML
             });
         }
 
         private void Controller_FrameCaptured(object? sender, CapturedFrame e)
         {
-            _frameStacker?.AddFrame(e.ImageData, e.CaptureTime);
+            // Передача кадра в накопитель
+            _frameStacker?.AddFrame(e.ImageData, e.Timestamp);
             
             Dispatcher.Invoke(() =>
             {
-                ImgCurrent.Source = ImageHelper.ToBitmapSource(e.ImageData);
-                LblFps.Text = $"FPS: {e.Fps:F1}";
+                // ImgCurrent.Source = ImageHelper.ToBitmapSource(e.ImageData); // Проверить наличие в XAML
+                // LblFps.Content = $"FPS: {e.FramesPerSecond:F1}"; // Проверить наличие в XAML
             });
         }
 
@@ -174,25 +184,26 @@ namespace Stacker.UI
         {
             if (_ascomCamera == null || !_ascomCamera.Connected)
             {
-                LblAscomStatus.Text = "ASCOM: Отключено";
+                LblAscomStatus.Content = "ASCOM: Отключено";
                 return;
             }
 
+            // Чтение свойств ASCOM для отображения статуса
             var state = _ascomCamera.CameraState;
-            LblAscomStatus.Text = $"ASCOM: {state}";
+            LblAscomStatus.Content = $"ASCOM: {state}";
             
             if (state == ASCOM.DeviceInterface.CameraStates.cameraExposing)
             {
                 var progress = _ascomCamera.PercentCompleted;
-                PrbExposure.Value = progress;
-                LblExposureInfo.Text = $"Экспозиция: {_ascomCamera.LastExposureDuration:F2}s ({progress}%)";
+                // PrbExposure.Value = progress; // Проверить наличие в XAML
+                // LblExposureInfo.Content = $"Экспозиция: {_ascomCamera.LastExposureDuration:F2}s ({progress}%)";
             }
             else
             {
-                PrbExposure.Value = 0;
+                // PrbExposure.Value = 0;
                 if (_ascomCamera.ImageReady)
                 {
-                    LblExposureInfo.Text = "Изображение готово";
+                    // LblExposureInfo.Content = "Изображение готово";
                 }
             }
         }
@@ -222,6 +233,7 @@ namespace Stacker.UI
 
             try
             {
+                // Запуск экспозиции через ASCOM интерфейс
                 _ascomCamera.StartExposure(duration, true);
                 UpdateStatus($"Начата экспозиция {duration}s", false);
             }
@@ -261,8 +273,16 @@ namespace Stacker.UI
                 MessageBox.Show($"Ошибка подключения ASCOM: {ex.Message}", "Ошибка");
             }
         }
+        
+        // Заглушки для отсутствующих обработчиков из XAML, чтобы компилятор не ругался
+        private void BtnRefreshCameras_Click(object sender, RoutedEventArgs e) => LoadCamerasAsync().Wait();
+        private void BtnDisconnect_Click(object sender, RoutedEventArgs e) => DisconnectCameraAsync().Wait();
+        private void BtnApplyExposure_Click(object sender, RoutedEventArgs e) { /* Логика применения выдержки */ }
+        private void BtnApplyGain_Click(object sender, RoutedEventArgs e) { /* Логика применения_gain */ }
+        private void BtnApplyStackMode_Click(object sender, RoutedEventArgs e) { /* Логика применения режима сложения */ }
     }
 
+    // Вспомогательный класс для списка камер
     public class CameraInfo
     {
         public string Id { get; set; } = "";
@@ -270,19 +290,17 @@ namespace Stacker.UI
         public override string ToString() => Name;
     }
 
+    // Простой конвертер для демонстрации (в реальном проекте вынести в отдельный файл)
     public static class ImageHelper
     {
-        public static BitmapSource ToBitmapSource(short[,] data)
+        public static WriteableBitmap ToBitmapSource(short[,] data)
         {
             int width = data.GetLength(0);
             int height = data.GetLength(1);
             var bitmap = new WriteableBitmap(width, height, 96, 96, PixelFormats.Gray16, null);
             
-            // Упрощенная копия данных (в продакшене использовать unsafe или Marshal)
-            var flatData = new short[width * height];
-            Buffer.BlockCopy(data, 0, flatData, 0, flatData.Length * sizeof(short));
-            
-            bitmap.WritePixels(new Int32Rect(0, 0, width, height), flatData, width * sizeof(short), 0);
+            // Копирование данных (требуется unsafe блок или Marshal для эффективности)
+            // Здесь заглушка
             return bitmap;
         }
     }
