@@ -1,26 +1,35 @@
 ```
 # Build artifacts
-bin/
-obj/
-*.dll
+*.o
+*.obj
 *.exe
-*.pdb
-*.userprefs
-*.cache
-*.log
+*.dll
+*.so
+*.a
+*.out
 
 # Dependencies
 packages/
-node_modules/
+lib/
+bin/
+obj/
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+
+# Environment
+.env
+.env.local
+*.env.*
 
 # Editors
-.vs/
+.vscode/
 .idea/
-*.user
-*.userosscache
-*.suo
+*.userprefs
 
-# OS
+# OS generated files
 .DS_Store
 Thumbs.db
 ```
