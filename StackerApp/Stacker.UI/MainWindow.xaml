@@ -1,7 +1,7 @@
 <Window x:Class="Stacker.UI.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Stacker ASCOM Camera" Height="600" Width="800">
+        Title="Stacker Camera App" Height="600" Width="800">
     <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -9,22 +9,22 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Панель управления -->
-        <GroupBox Grid.Row="0" Header="Управление камерой" Margin="0,0,0,10">
+        <!-- Панель управления камерой -->
+        <GroupBox Grid.Row="0" Header="Камера" Margin="0,0,0,10">
             <StackPanel Orientation="Vertical">
                 <StackPanel Orientation="Horizontal" Margin="5">
-                    <TextBlock Text="Камера:" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                    <TextBlock Text="Камера:" VerticalAlignment="Center" Margin="0,0,10,0"/>
                     <ComboBox x:Name="CmbCameras" Width="200" Margin="0,0,10,0"/>
                     <Button x:Name="BtnConnect" Content="Подключить" Click="BtnConnect_Click" Padding="10,5"/>
                 </StackPanel>
                 
                 <StackPanel Orientation="Horizontal" Margin="5">
-                    <TextBlock Text="Выдержка (сек):" VerticalAlignment="Center" Margin="0,0,5,0"/>
-                    <TextBox x:Name="TxtExposure" Width="60" Text="1.0" Margin="0,0,5,0"/>
-                    <Button x:Name="BtnStartExposure" Content="Старт" Click="BtnStartExposure_Click" Padding="10,5" Margin="0,0,5,0"/>
-                    <Button x:Name="BtnStopExposure" Content="Стоп" Click="BtnStopExposure_Click" Padding="10,5"/>
+                    <TextBlock Text="Выдержка (с):" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBox x:Name="TxtExposure" Width="60" Text="1.0" Margin="0,0,10,0"/>
+                    <Button Content="Старт" Click="BtnStartExposure_Click" Padding="10,5" Margin="0,0,5,0"/>
+                    <Button Content="Стоп" Click="BtnStopExposure_Click" Padding="10,5"/>
                 </StackPanel>
-
+                
                 <StackPanel Orientation="Horizontal" Margin="5">
                     <Button x:Name="BtnConnectAscom" Content="Подключить ASCOM" Click="BtnConnectAscom_Click" Padding="10,5"/>
                 </StackPanel>
@@ -32,39 +32,22 @@
         </GroupBox>
 
         <!-- Область просмотра -->
-        <Grid Grid.Row="1">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="300"/>
-            </Grid.ColumnDefinitions>
+        <GroupBox Grid.Row="1" Header="Изображение" Margin="0,0,0,10">
+            <Grid>
+                <Image x:Name="ImgCurrent" Stretch="Uniform" Background="Black"/>
+                <TextBlock x:Name="LblFps" Text="FPS: 0" HorizontalAlignment="Left" VerticalAlignment="Top" 
+                           Foreground="White" Background="Black" Opacity="0.7" Margin="10"/>
+            </Grid>
+        </GroupBox>
 
-            <!-- Изображение -->
-            <Border Grid.Column="0" BorderBrush="Gray" BorderThickness="1" Background="Black">
-                <Image x:Name="ImgCurrent" Stretch="Uniform"/>
-            </Border>
-
-            <!-- Панель статуса и настроек -->
-            <StackPanel Grid.Column="1" Margin="10,0,0,0">
-                <TextBlock x:Name="LblStatus" Text="Готов" FontWeight="Bold" Margin="0,0,0,10"/>
-                <TextBlock x:Name="LblFps" Text="FPS: 0" Margin="0,0,0,10"/>
-                <TextBlock x:Name="LblAscomStatus" Text="ASCOM: Отключено" Margin="0,0,0,10"/>
-                
-                <ProgressBar x:Name="PrbExposure" Height="20" Minimum="0" Maximum="100" Value="0" Margin="0,0,0,5"/>
-                <TextBlock x:Name="LblExposureInfo" Text="Ожидание..." Margin="0,0,0,20"/>
-
-                <GroupBox x:Name="GrpCameraSettings" Header="Настройки" IsEnabled="False">
-                    <StackPanel>
-                        <TextBlock Text="Настройки камеры будут доступны после подключения." TextWrapping="Wrap"/>
-                    </StackPanel>
-                </GroupBox>
+        <!-- Статус и прогресс -->
+        <GroupBox Grid.Row="2" Header="Статус">
+            <StackPanel Orientation="Vertical">
+                <TextBlock x:Name="LblStatus" Text="Готов" Margin="5"/>
+                <TextBlock x:Name="LblAscomStatus" Text="ASCOM: Отключено" Margin="5"/>
+                <ProgressBar x:Name="PrbExposure" Height="20" Minimum="0" Maximum="100" Value="0" Margin="5"/>
+                <TextBlock x:Name="LblExposureInfo" Text="" Margin="5"/>
             </StackPanel>
-        </Grid>
-
-        <!-- Нижняя панель -->
-        <StatusBar Grid.Row="2">
-            <StatusBarItem>
-                <TextBlock Text="Stacker ASCOM Driver v1.0"/>
-            </StatusBarItem>
-        </StatusBar>
+        </GroupBox>
     </Grid>
 </Window>

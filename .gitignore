@@ -1,1 +1,35 @@
-Nothing should be ignored in this case, as the changes only include source code files (.xaml and .xaml.cs) which are part of the normal project files and not build artifacts, dependencies, or temporary files.
+```
+# Build artifacts
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.a
+*.out
+
+# Dependencies
+packages/
+lib/
+bin/
+obj/
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editors
+.vscode/
+.idea/
+*.userprefs
+
+# OS generated files
+.DS_Store
+Thumbs.db
+```
